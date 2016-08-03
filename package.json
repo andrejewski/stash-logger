@@ -1,0 +1,29 @@
+{
+  "name": "stash-logger",
+  "version": "0.0.1",
+  "description": "buffered/contextual logger",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrejewski/stash-logger.git"
+  },
+  "keywords": [
+    "log",
+    "logger",
+    "exception",
+    "error",
+    "report"
+  ],
+  "author": "Chris Andrejewski <christopher.andrejewski@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/andrejewski/stash-logger/issues"
+  },
+  "homepage": "https://github.com/andrejewski/stash-logger#readme",
+  "dependencies": {
+    "superagent": "^2.1.0"
+  }
+}
