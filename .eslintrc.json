@@ -1,0 +1,7 @@
+{
+  "extends": "@earnest/eslint-config-es7",
+  "rules": {
+      "keyword-spacing": "off",
+      "space-before-function-paren": "off"
+  }
+}

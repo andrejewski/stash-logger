@@ -12,9 +12,17 @@ const myLogger = new StashLogger({
   appId: 'my-awesome-app'
 });
 
+myLogger.attach();
+// sets the buffer write interval
+// adds error listeners to window/process globals appropriately
+
 myLogger.error('Bad stuff happened');
 // ^ adds to the buffer which will group messages to send off
 
 myLogger.errorImmediately('Really bad stuff happened');
 // ^ sends this log off without waiting in the buffer
+
+myLogger.detach();
+// clears the buffer write interval
+// removes error listeners from window/process
 ```

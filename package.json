@@ -1,29 +1,48 @@
 {
   "name": "stash-logger",
-  "version": "0.0.1",
   "description": "buffered/contextual logger",
-  "main": "lib/index.js",
-  "scripts": {
-    "test": "mocha"
+  "version": "0.0.1",
+  "author": "Chris Andrejewski <christopher.andrejewski@gmail.com>",
+  "bugs": {
+    "url": "https://github.com/andrejewski/stash-logger/issues"
   },
+  "dependencies": {
+    "superagent": "^2.1.0"
+  },
+  "devDependencies": {
+    "babel-eslint": "^6.1.2",
+    "babel-polyfill": "^6.9.1",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-stage-0": "^6.5.0",
+    "babel-regenerator-runtime": "^6.5.0",
+    "babel-register": "^6.11.6",
+    "del": "^2.2.1",
+    "gulp": "^3.9.1",
+    "gulp-babel": "^6.1.2",
+    "gulp-eslint": "^3.0.1",
+    "gulp-mocha": "^3.0.0",
+    "gulp-sourcemaps": "^1.6.0",
+    "gulp-util": "^3.0.7",
+    "mocha": "^3.0.1",
+    "source-map-support": "^0.4.2"
+  },
+  "homepage": "https://github.com/andrejewski/stash-logger#readme",
+  "keywords": [
+    "error",
+    "exception",
+    "log",
+    "logger",
+    "report"
+  ],
+  "license": "ISC",
+  "main": "lib/index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/andrejewski/stash-logger.git"
   },
-  "keywords": [
-    "log",
-    "logger",
-    "exception",
-    "error",
-    "report"
-  ],
-  "author": "Chris Andrejewski <christopher.andrejewski@gmail.com>",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/andrejewski/stash-logger/issues"
-  },
-  "homepage": "https://github.com/andrejewski/stash-logger#readme",
-  "dependencies": {
-    "superagent": "^2.1.0"
+  "scripts": {
+    "test": "mocha --compilers js:babel-register",
+    "build": "gulp build",
+    "watch": "gulp watch"
   }
 }
