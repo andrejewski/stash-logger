@@ -12,10 +12,13 @@ import sourcemaps from 'gulp-sourcemaps';
 
 gulp.task('default', ['build']);
 
-gulp.task('build', ['buildSrc']);
+gulp.task('build', ['cleanLib', 'buildSrc']);
 
-gulp.task('watch', ['buildSrc', 'mocha'], () => {
-  gulp.watch(['lib/**', 'test/**'], ['mocha']);
+gulp.task('watch', ['build', '_watch', 'mocha']);
+
+gulp.task('_watch', () => {
+  gulp.watch(['src/**'], ['build', 'mocha']);
+  gulp.watch(['test/**'], ['mocha']);
 });
 
 gulp.task('cleanLib', () => {

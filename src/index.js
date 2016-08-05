@@ -15,6 +15,7 @@ export default class StashLogger {
     }
     this.options = Object.assign(this.defaults(), options || {});
     this.parent = parent;
+    this._logBuffer = [];
 
     this.options.logLevels.forEach(level => {
       this[level] = function() {
@@ -60,7 +61,11 @@ export default class StashLogger {
   }
 
   extend(options = {}) {
-    return new StashLogger(this, Object.assign(this.options, options));
+    return new StashLogger(this, Object.assign({}, this.options, options));
+  }
+
+  buffer() {
+    return this._logBuffer.slice(0);
   }
 
   // @Override
@@ -132,20 +137,22 @@ export default class StashLogger {
     return importance >= threshold;
   }
 
-  _handleLog(level, args, immediate = false, ctx = {}) {
-    if (this._isImportant(level)) {
-      const {context} = this.options;
-      const sharedContext = Object.assign(context, ctx);
-      if (this.parent) {
-        return this.parent._handleLog(level, args, immediate, sharedContext);
-      }
-
-      const args = Array.prototype.slice.call(args, 0);
-      if (immediate) {
-        return this._logImmediately(level, args, sharedContext);
-      }
-      this._logEventually(level, args, sharedContext);
+  _handleLog(level, params, immediate = false, ctx) {
+    if (!(ctx || this._isImportant(level))) {
+      return;
     }
+
+    const {context} = this.options;
+    const sharedContext = Object.assign(context, ctx || {});
+    if (this.parent) {
+      return this.parent._handleLog(level, params, immediate, sharedContext);
+    }
+
+    const args = Array.prototype.slice.call(params, 0);
+    if (immediate) {
+      return this._logImmediately(level, args, sharedContext);
+    }
+    this._logEventually(level, args, sharedContext);
   }
 
   _logEventually(level, args, context) {
