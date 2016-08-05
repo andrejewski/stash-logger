@@ -1,27 +1,5 @@
 import request from 'superagent';
 
-const loggerDefaults = {
-  logLevel: 'error',
-  logLevels: [
-    'log',
-    'info',
-    'warn',
-    'error'
-  ],
-  bufferMaxPayload: 15 * 1024, // 15 kB
-  bufferCheckInterval: 250,   // 1/4 second
-  bufferWriteInterval: 1000, // 1 second
-  bufferWriteTimeout: 10000, // 10 seconds
-  bufferMaxWriteRetries: 3,
-
-  appId: null,
-  topic: null,
-  context: {},
-
-  handleWindow: typeof window !== 'undefined',
-  handleProcess: typeof process !== 'undefined'
-};
-
 export class StashLoggerError extends Error {
   constructor() {
     super(...arguments);
@@ -35,7 +13,7 @@ export default class StashLogger {
       options = parent;
       parent = null;
     }
-    this.options = Object.assign(loggerDefaults, options || {});
+    this.options = Object.assign(this.defaults(), options || {});
     this.parent = parent;
 
     this.options.logLevels.forEach(level => {
@@ -81,8 +59,57 @@ export default class StashLogger {
     return this;
   }
 
-  extend(options) {
+  extend(options = {}) {
     return new StashLogger(this, Object.assign(this.options, options));
+  }
+
+  // @Override
+  makeLog(level, raw, context) {
+    const message = JSON.stringify({raw, context});
+    const now = (new Date()).toISOString();
+    return {
+      level,
+      message,
+      time: now,
+      topic: this.options.topic
+    };
+  }
+
+  // @Override
+  makePayload(logs) {
+    const {appId} = this.options;
+    return {
+      app: {appId},
+      traces: logs
+    };
+  }
+
+  // @Override
+  defaults() {
+    return {
+      logLevel: 'error',
+      logLevels: [
+        'log',
+        'info',
+        'warn',
+        'error'
+      ],
+
+      bufferMaxPayloadSize: 15 * 1024, // 15 kB
+      bufferCheckInterval: 250,   // 1/4 second
+      bufferWriteInterval: 1000, // 1 second
+      bufferMaxWriteRetries: 3,
+
+      requestUrl: '/logs',
+      requestTimeout: 10000, // 10 seconds
+
+      appId: null,
+      topic: null,
+      context: {},
+
+      handleWindow: typeof window !== 'undefined',
+      handleProcess: typeof process !== 'undefined'
+    };
   }
 
   _fatalLevel() {
@@ -105,98 +132,70 @@ export default class StashLogger {
     return importance >= threshold;
   }
 
-  _handleLog(level, args, immediate) {
+  _handleLog(level, args, immediate = false, ctx = {}) {
     if (this._isImportant(level)) {
+      const {context} = this.options;
+      const sharedContext = Object.assign(context, ctx);
+      if (this.parent) {
+        return this.parent._handleLog(level, args, immediate, sharedContext);
+      }
+
       const args = Array.prototype.slice.call(args, 0);
       if (immediate) {
-        return this._logImmediately(level, args);
+        return this._logImmediately(level, args, sharedContext);
       }
-      this._logEventually(level, args);
+      this._logEventually(level, args, sharedContext);
     }
   }
 
-  _buildLog(level, raw, context) {
-    const message = JSON.stringify({raw, context});
-    const now = (new Date()).toISOString();
-    return {
-      level,
-      message,
-      time: now,
-      topic: this.options.topic
-    };
+  _logEventually(level, args, context) {
+    const log = this.makeLog(level, args, context);
+    this._logBuffer.push(log);
   }
 
-  _logEventually(level, logs, context = {}) {
-    const newContext = Object.assign(this.options.context, context);
-    if (this.parent) {
-      return this.parent._logEventually(level, logs, newContext);
-    }
-    logs = logs.map(log => this._buildLog(level, log, newContext));
-    return this._bufferLogs(logs);
-  }
-
-  _logImmediately(level, logs, context = {}) {
-    const newContext = Object.assign(this.options.context, context);
-    if (this.parent) {
-      return this.parent._logImmediately(level, logs, newContext);
-    }
-    logs = logs.map(log => this._buildLog(level, log, newContext));
-    return this._sendLogs(this._package(logs));
-  }
-
-  _bufferLogs(logs) {
-    logs.forEach(log => this._logBuffer.push(log));
-  }
-
-  _package(logs) {
-    if (this.options.packagePayload) {
-      return this.options.packagePayload(logs);
-    }
-    const {appId} = this.options;
-    return {
-      app: {appId},
-      traces: logs
-    };
+  _logImmediately(level, args, context = {}) {
+    const log = this.makeLog(level, args, context);
+    const payload = this.makePayload(log);
+    return this._makeRequest(payload);
   }
 
   _scheduleLogWrite() {
-    if (this._writePending || this._lastWrittenAt + this.options.bufferWriteInterval > Date.now()) {
-      return;
-    }
+    const {_pendingWrites, _lastWrittenAt} = this;
+    if (_pendingWrites) return;
+
+    const {bufferWriteInterval} = this.options;
+    if (_lastWrittenAt + bufferWriteInterval < Date.now()) return;
 
     const write = this._nextWrite();
-    if (!write.payload) {
-      return;
-    }
+    if (!write) return;
 
-    return this._sendPayload(write.payload)
-      .then(() => {
-        this._logBuffer = write.remainingLogs;
+    const {payload, remainingLogs} = write;
+    return this._sendPayload(payload)
+      .catch(error => {
+        throw error;
       })
-      .catch(reason => {
-        if (reason.origin === 'server') {
-          // failover and purge logs
-          this._logBuffer = write.remainingLogs;
-        } else {
-          // throw BIG
-          const message = 'Client-side logging error; fix ASAP';
-          const error = reason || new StashLoggerError(message);
-          throw error;
-        }
+      .finally(() => {
+        this._logBuffer = remainingLogs;
       });
   }
 
   _nextWrite() {
-    const logs = this._bufferLogs;
-    const {bufferMaxPayload} = this.options;
-    let index = 0;
-    let payload = '';
-    while (payload.length < bufferMaxPayload && index < logs.length) {
-      const pendingLogs = logs.slice(0, index);
-      payload = this._package(pendingLogs);
-      index++;
+    const logs = this._logBuffer;
+    const {bufferMaxPayloadSize} = this.options;
+    if (!logs.length) return null;
+    let bound = logs.length;
+    let payload = {length: Infinity};
+    while (payload.length > bufferMaxPayloadSize) {
+      if (bound < 1) {
+        this._logBuffer.shift(); // single log too large; prune it
+        return this._nextWrite();
+      }
+
+      const pendingLogs = logs.slice(0, bound);
+      payload = JSON.stringify(this.makePayload(pendingLogs));
+      bound = Math.floor(bound / 2);
     }
-    const remainingLogs = logs.slice(index);
+    const remainingLogs = logs.slice(bound);
     return {payload, remainingLogs};
   }
 
@@ -226,12 +225,12 @@ export default class StashLogger {
   }
 
   _makeRequest(payload) {
-    const {endpoint, bufferWriteTimeout} = this.options;
+    const {requestUrl, requestTimeout} = this.options;
     return new Promise((resolve, reject) => {
       request
-        .post(endpoint)
+        .post(requestUrl)
         .send(payload)
-        .timeout(bufferWriteTimeout)
+        .timeout(requestTimeout)
         .end((error, res) => {
           if (error) return reject(error);
 

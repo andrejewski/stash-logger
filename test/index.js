@@ -13,11 +13,19 @@ describe('StashLogger', () => {
   });
 
   describe('attach()', () => {
-    it('should throw for non-root StashLoggers');
+    it('should throw for non-root StashLoggers', () => {
+      const parent = new StashLogger();
+      const child = parent.extend();
+      assert.throws(() => child.attach());
+    });
   });
 
   describe('detach()', () => {
-    it('should throw for non-root StashLoggers');
+    it('should throw for non-root StashLoggers', () => {
+      const parent = new StashLogger();
+      const child = parent.extend();
+      assert.throws(() => child.attach());
+    });
   });
 
   describe('extend(options)', () => {
